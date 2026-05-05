@@ -2,7 +2,7 @@
 
 A Flutter application for displaying and filtering PamGene TIFF images from the Tercen platform with real-time TIFF to PNG conversion.
 
-## Features
+## Features 
 
 - **Image Grid Display**: Dynamic grid layout showing images with row numbers and column IDs
 - **Filter Controls**:
