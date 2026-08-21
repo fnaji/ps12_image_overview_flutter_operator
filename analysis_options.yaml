@@ -9,6 +9,15 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  # Local-only material: reference documents, scratch files and development
+  # utilities. Not part of the deployed operator, and not covered by
+  # .gitignore as far as the analyzer is concerned - it walks the package
+  # directory regardless of what git tracks.
+  exclude:
+    - _local/**
+    - build/**
+
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

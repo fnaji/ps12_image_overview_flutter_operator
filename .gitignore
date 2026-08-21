@@ -34,6 +34,11 @@ migrate_working_dir/
 # Pattern must un-ignore the /build/web directory itself (not /build/web/),
 /build/*
 !/build/web
+# ...but not the canvaskit symbol maps. Nothing in the served bundle requests
+# them (verified: no reference in any built .js/.html/.json); they exist only
+# for offline stack-trace symbolication via `flutter symbolize`. Excluding them
+# keeps ~8MB out of every GitHub zipball Tercen has to download.
+/build/web/**/*.symbols
 /coverage/
 
 # Symbolication related
@@ -54,18 +59,25 @@ app.*.map.json
 /linux/
 /macos/
 
-# Local settings
-.claude/settings.local.json
+# Claude Code - local tooling and settings, never deployed
+.claude/
+
 
 # Temporary files
 nul
 
-# Technical specification
+# Specifications and design documents - kept in _local, not deployed
 FLUTTER_TECHNICAL_SPECIFICATION.md
+IMAGE_OVERVIEW_*.md
 PTK_3project.zip
 
 # Chat review and conversation transcripts
 chat_review/
 
-# Local reference materials (not committed)
+# Local reference materials, specs and dev utilities (not committed)
 _local/
+
+# Development-only scripts. Live in _local/dev-tools/ - they are debugging
+# helpers, not part of the deployed operator.
+/tool/
+/tools/

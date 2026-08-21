@@ -43,6 +43,21 @@ class ImageCollection {
     return images.map((img) => img.column).toSet().toList()..sort();
   }
 
+  /// Maps each grid column index to the barcode that identifies it.
+  ///
+  /// Derived from the images themselves rather than from a barcode's position
+  /// in a sorted list, so a column whose images carry an empty barcode simply
+  /// has no entry instead of borrowing another column's label (CR-01-16).
+  Map<int, String> get barcodesByColumn {
+    final byColumn = <int, String>{};
+    for (final image in images) {
+      final barcode = image.metadata['barcode'] as String? ?? '';
+      if (barcode.isEmpty) continue;
+      byColumn.putIfAbsent(image.column, () => barcode);
+    }
+    return byColumn;
+  }
+
   /// Gets unique barcode values for column labels.
   List<String> get uniqueBarcodes {
     final barcodes = images

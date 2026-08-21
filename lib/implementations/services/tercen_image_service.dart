@@ -7,6 +7,7 @@ import 'package:ps12_image_overview/models/image_metadata.dart';
 import 'package:ps12_image_overview/models/image_metadata_impl.dart';
 import 'package:ps12_image_overview/services/image_service.dart';
 import 'package:ps12_image_overview/utils/image_bytes_cache.dart';
+import 'package:ps12_image_overview/utils/request_deduplicator.dart';
 import 'package:ps12_image_overview/utils/tiff_converter.dart';
 import 'package:ps12_image_overview/utils/document_id_resolver.dart';
 import 'package:sci_tercen_client/sci_client_service_factory.dart';
@@ -38,6 +39,11 @@ class TercenImageService implements ImageService {
 
   /// Queue of pending download requests
   final List<_DownloadRequest> _downloadQueue = [];
+
+  /// Collapses repeated requests for the same image onto one download
+  /// (CR-01-31), so widget rebuilds during loading cannot queue duplicates.
+  final RequestDeduplicator<Uint8List?> _inFlight =
+      RequestDeduplicator<Uint8List?>();
 
   TercenImageService(
     this._serviceFactory, {
@@ -304,23 +310,34 @@ class TercenImageService implements ImageService {
   /// concurrent downloads. Maximum of 3 concurrent downloads allowed.
   ///
   /// Returns null if the download or conversion fails.
-  Future<Uint8List?> fetchAndConvertImage(String imageId) async {
+  Future<Uint8List?> fetchAndConvertImage(String imageId) {
     // Check cache first
-    if (_cache.contains(imageId)) {
-      return _cache.get(imageId);
+    final cached = _cache.get(imageId);
+    if (cached != null) {
+      return Future.value(cached);
     }
 
-    // Create a completer for this download request
-    final completer = Completer<Uint8List?>();
-    final request = _DownloadRequest(imageId, completer);
+    // Share one download between all callers asking for this image
+    // (CR-01-31).
+    return _inFlight.run(imageId, () {
+      final completer = Completer<Uint8List?>();
+      final request = _DownloadRequest(imageId, completer);
 
-    // Add to queue and try to process
-    _downloadQueue.add(request);
-    _processQueue();
+      // Add to queue and try to process
+      _downloadQueue.add(request);
+      _processQueue();
 
-    // Wait for the download to complete
-    return completer.future;
+      // Wait for the download to complete
+      return completer.future;
+    });
   }
+
+  /// Returns already-converted PNG bytes for [imageId], or null if not cached.
+  ///
+  /// Synchronous by design (CR-01-30): lets the UI paint a cached image on the
+  /// current frame instead of routing through a FutureBuilder, which would
+  /// start at ConnectionState.waiting and flash a spinner on every rebuild.
+  Uint8List? cachedImage(String imageId) => _cache.get(imageId);
 
   /// Processes the download queue, respecting the concurrency limit.
   void _processQueue() {

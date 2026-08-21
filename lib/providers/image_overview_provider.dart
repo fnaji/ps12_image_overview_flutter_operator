@@ -40,6 +40,9 @@ class ImageOverviewProvider extends ChangeNotifier {
   /// Gets all unique barcodes from ALL images (for column labels).
   List<String> get allBarcodes => _allImages.uniqueBarcodes;
 
+  /// Maps column index to barcode, for the pinned column header row.
+  Map<int, String> get allBarcodesByColumn => _allImages.barcodesByColumn;
+
   /// Loads images from the service.
   /// On initial load, defaults to highest cycle and highest exposure time.
   Future<void> loadImages() async {

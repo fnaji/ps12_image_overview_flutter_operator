@@ -6,56 +6,36 @@ import 'package:ps12_image_overview/services/image_service.dart';
 import 'package:ps12_image_overview/implementations/services/tercen_image_service.dart';
 
 /// Widget that displays a single image cell in the grid.
+///
+/// Barcode labels are deliberately not drawn here (CR-01-10). They live in the
+/// grid's pinned column header row instead, so they stay visible while the grid
+/// scrolls vertically and render regardless of which rows are present in the
+/// dataset or survive the active filter.
 class ImageGridCell extends StatelessWidget {
   final ImageMetadata image;
-  final bool showLabel;
 
   const ImageGridCell({
     super.key,
     required this.image,
-    this.showLabel = true,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Column(
-      children: [
-        // Barcode label at the top (only shown for first row - row 0)
-        if (showLabel && image.row == 0)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-            color: isDark ? Colors.grey.shade800 : Colors.grey.shade50,
-            child: Text(
-              image.metadata['barcode'] as String? ?? image.id,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-          ),
-        // Image cell
-        Expanded(
-          child: Container(
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
-                width: 1,
-              ),
-            ),
-            child: Container(
-              color: Colors.black,
-              child: Center(
-                child: _buildImage(),
-              ),
-            ),
-          ),
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+          width: 1,
         ),
-      ],
+      ),
+      child: Container(
+        color: Colors.black,
+        child: Center(
+          child: _buildImage(),
+        ),
+      ),
     );
   }
 
@@ -64,8 +44,9 @@ class ImageGridCell extends StatelessWidget {
   /// Priority:
   /// 1. imageBytes - runtime-loaded images (from API + TIFF conversion)
   /// 2. imagePath - bundled asset images
-  /// 3. Lazy-load from Tercen API and convert TIFF to PNG
-  /// 4. placeholder - fallback dot pattern
+  /// 3. Bytes already sitting in the service cache, read synchronously
+  /// 4. Lazy-load from Tercen API and convert TIFF to PNG
+  /// 5. placeholder - fallback dot pattern
   Widget _buildImage() {
     // First priority: pre-loaded image bytes
     if (image.imageBytes != null) {
@@ -89,9 +70,24 @@ class ImageGridCell extends StatelessWidget {
       );
     }
 
-    // Third priority: lazy-load from Tercen API
     final imageService = locator<ImageService>();
     if (imageService is TercenImageService) {
+      // Third priority: paint cached bytes on this frame (CR-01-30). Routing a
+      // cache hit through the FutureBuilder below would start at
+      // ConnectionState.waiting and flash a spinner every rebuild - very
+      // visible while panning.
+      final cached = imageService.cachedImage(image.id);
+      if (cached != null) {
+        return Image.memory(
+          cached,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildErrorIndicator('Image decode failed');
+          },
+        );
+      }
+
+      // Fourth priority: lazy-load from Tercen API
       return FutureBuilder<Uint8List?>(
         future: imageService.fetchAndConvertImage(image.id),
         builder: (context, snapshot) {
