@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:sci_tercen_client/sci_client_service_factory.dart';
-import 'package:sci_tercen_client/sci_client.dart' show DoneState, CanceledState;
+import 'package:sci_tercen_client/sci_client.dart' show CanceledState, DoneState, InitState, PendingState, RunningState;
 
 /// Manages Tercen task lifecycle - marking task as done and handling cancellation.
 ///
@@ -30,6 +30,11 @@ class TaskLifecycleManager {
   /// Marks the task as completed (DoneState).
   ///
   /// Call this when the app has finished initial loading and is ready for user interaction.
+  ///
+  /// Tercen parks a webapp task in PendingState and rejects PendingState ->
+  /// DoneState (state.bad.transition), so the task goes through RunningState
+  /// first. A task that is already final (e.g. cancelled before the app
+  /// loaded) is left as it is.
   Future<void> markTaskComplete() async {
     if (_isCompleted) {
       print('⚠️ Task already marked as complete');
@@ -42,11 +47,21 @@ class TaskLifecycleManager {
       // Fetch current task
       final task = await _serviceFactory.taskService.get(_taskId);
 
-      // Update state to DoneState
-      task.state = DoneState();
+      if (task.state is CanceledState) {
+        _handleCancellation();
+        return;
+      }
 
-      // Save updated task
-      await _serviceFactory.taskService.update(task);
+      if (task.state is InitState || task.state is PendingState) {
+        task.state = RunningState();
+        await _serviceFactory.taskService.update(task);
+      }
+
+      // Update state to DoneState (update() refreshes task.rev)
+      if (task.state is RunningState) {
+        task.state = DoneState();
+        await _serviceFactory.taskService.update(task);
+      }
 
       _isCompleted = true;
       print('✅ Task marked as complete (DoneState)');
